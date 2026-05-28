@@ -107,6 +107,10 @@ artifacts/*
 !artifacts/trained_models/feature_profile.joblib
 !artifacts/trained_models/lightgbm_normal_non_leakage.joblib
 !artifacts/trained_models/deeplearning_test_mlp.joblib
+
+assets/*
+!assets/TireLife_UI_QRCode.png
+
 Synthetic Automobile Tyre RUL Data.csv
 *.parquet
 *.pkl

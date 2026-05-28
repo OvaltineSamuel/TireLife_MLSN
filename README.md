@@ -2,6 +2,8 @@
 
 TireLife predicts remaining tire life from vehicle, tire, and driving-style inputs.
 
+![TireLife Demo QR Code](assets/TireLife_UI_QRCode.png)
+
 The demo app is organized as:
 
 ```text
