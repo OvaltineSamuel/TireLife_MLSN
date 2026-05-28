@@ -110,6 +110,7 @@ artifacts/*
 
 assets/*
 !assets/TireLife_UI_QRCode.png
+!assets/TireLife_new_UI_QRCode.png
 
 *.md
 !README.md

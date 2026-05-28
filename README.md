@@ -2,7 +2,7 @@
 
 TireLife predicts remaining tire life to the recommended replacement threshold from vehicle, tire, and driving-style inputs.
 
-![TireLife Demo QR Code](assets/TireLife_UI_QRCode.png)
+![TireLife Demo QR Code](assets/TireLife_new_UI_QRCode.png)
 
 The demo app is organized as:
 
