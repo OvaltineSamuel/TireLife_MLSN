@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { sendChatMessage } from '../api/tirelifeApi.js'
 import ResultCard from './ResultCard.jsx'
 
@@ -85,7 +85,11 @@ function AssistantText({ text }) {
   )
 }
 
-export default function ChatMode({ availableModels = ['lightgbm'] }) {
+export default function ChatMode({
+  availableModels = ['lightgbm'],
+  distanceUnit = 'km',
+  treadUnit = 'mm',
+}) {
   const [model, setModel] = useState('lightgbm')
   const [sessionId, setSessionId] = useState(null)
   const [input, setInput] = useState('')
@@ -95,6 +99,20 @@ export default function ChatMode({ availableModels = ['lightgbm'] }) {
   ])
   const [missingFields, setMissingFields] = useState([])
   const [suggestAutofill, setSuggestAutofill] = useState(false)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+
+    el.style.height = '0px'
+    const nextHeight = Math.min(160, Math.max(88, el.scrollHeight))
+    el.style.height = `${nextHeight}px`
+  }, [input])
+
+  const placeholder = treadUnit === 'inch32'
+    ? `Example: tread is 6/32, driven 28000 ${distanceUnit === 'miles' ? 'miles' : 'km'}, pressure 32 psi, tyre age 3 years`
+    : `Example: tread is 4.5 mm, driven 28000 ${distanceUnit === 'miles' ? 'miles' : 'km'}, pressure 32 psi, tyre age 3 years`
 
   async function sendMessage(rawMessage, forcePredict = false) {
     const message = rawMessage.trim()
@@ -135,6 +153,13 @@ export default function ChatMode({ availableModels = ['lightgbm'] }) {
   function onSubmit(e) {
     e.preventDefault()
     sendMessage(input)
+  }
+
+  function onInputKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage(input)
+    }
   }
 
   function resetChat() {
@@ -225,7 +250,7 @@ export default function ChatMode({ availableModels = ['lightgbm'] }) {
               >
                 {m.role === 'assistant' ? <AssistantText text={m.text} /> : m.text}
               </div>
-              <ResultCard prediction={m.prediction} />
+              <ResultCard prediction={m.prediction} distanceUnit={distanceUnit} treadUnit={treadUnit} />
             </div>
           ))}
           {loading && (
@@ -286,35 +311,64 @@ export default function ChatMode({ availableModels = ['lightgbm'] }) {
         </div>
       )}
 
-      <form onSubmit={onSubmit} style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-        <input
+      <form onSubmit={onSubmit} style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'stretch' }}>
+        <textarea
+          ref={inputRef}
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Example: tread is 4.5 mm, driven 28000 km, pressure 32 psi, tyre age 3 years"
+          onKeyDown={onInputKeyDown}
+          rows={1}
+          placeholder={placeholder}
           style={{
             flex: 1,
+            minHeight: 88,
+            maxHeight: 160,
             border: '1px solid #d1d5db',
             borderRadius: 8,
             padding: '10px 12px',
             fontSize: 14,
+            lineHeight: 1.45,
+            resize: 'none',
+            overflowY: 'auto',
+            boxSizing: 'border-box',
+            fontFamily: 'inherit',
           }}
         />
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            border: 'none',
-            borderRadius: 8,
-            padding: '10px 14px',
-            fontSize: 14,
-            fontWeight: 600,
-            background: '#111',
-            color: '#fff',
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          Send
-        </button>
+        <div style={{ width: 72, display: 'grid', gridTemplateRows: '1fr 1fr', gap: 6 }}>
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              border: 'none',
+              borderRadius: 8,
+              padding: '0 10px',
+              fontSize: 14,
+              fontWeight: 600,
+              background: '#111',
+              color: '#fff',
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Send
+          </button>
+          <button
+            type="button"
+            onClick={resetChat}
+            disabled={loading}
+            style={{
+              border: '1px solid #fecaca',
+              borderRadius: 8,
+              padding: '0 10px',
+              fontSize: 13,
+              fontWeight: 700,
+              background: '#fef2f2',
+              color: '#b91c1c',
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Reset
+          </button>
+        </div>
       </form>
     </div>
   )

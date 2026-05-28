@@ -1,6 +1,6 @@
 # TireLife
 
-TireLife predicts remaining tire life from vehicle, tire, and driving-style inputs.
+TireLife predicts remaining tire life to the recommended replacement threshold from vehicle, tire, and driving-style inputs.
 
 ![TireLife Demo QR Code](assets/TireLife_UI_QRCode.png)
 
@@ -100,7 +100,7 @@ npm run build
 Start FastAPI from the repo root:
 
 ```bash
-python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
 When `dist/index.html` exists, FastAPI serves the frontend and API from the same
@@ -112,6 +112,11 @@ origin.
 - `POST /api/predict`
 - `POST /api/chat`
 - `POST /api/config/gemini`
+
+Prediction responses use a safety post-processing step: the trained model's raw
+distance-to-0.0 mm estimate is converted to distance until the 3.0 mm recommended
+replacement threshold. The response also includes the raw model estimate and the
+1.6 mm legal-minimum estimate for reference.
 
 Example prediction:
 

@@ -43,6 +43,10 @@ FRONTEND_DIST_DIR = _path_from_env("FRONTEND_DIST_DIR", ROOT_DIR / "dist")
 TARGET_COL = "remaining_useful_life(km)"
 DEFAULT_MODEL = "lightgbm"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+LEGAL_MINIMUM_TREAD_DEPTH_MM = 1.6
+RECOMMENDED_REPLACEMENT_TREAD_DEPTH_MM = 3.0
+ACTIVE_REPLACEMENT_TREAD_DEPTH_MM = RECOMMENDED_REPLACEMENT_TREAD_DEPTH_MM
+KM_TO_MILES = 0.621371
 
 # Keep "normal" model free from obvious target leakage.
 LEAKAGE_EXCLUDED_COLS = {
@@ -206,6 +210,13 @@ class PredictResponse(BaseModel):
     model: str
     predicted_rul_km: float
     predicted_rul_miles: float
+    raw_model_rul_to_zero_km: float
+    raw_model_rul_to_zero_miles: float
+    legal_minimum_rul_km: float
+    legal_minimum_rul_miles: float
+    replacement_threshold_mm: float
+    legal_minimum_tread_depth_mm: float
+    recommended_replacement_tread_depth_mm: float
     defaults_used: list[str]
     defaults_used_count: int
     normalized_features: dict[str, Any]
@@ -929,10 +940,45 @@ class TireRULService:
         pred = float(model.predict(row)[0])
         return max(0.0, pred)
 
+    @staticmethod
+    def _rul_to_tread_threshold(
+        *,
+        raw_rul_to_zero_km: float,
+        current_tread_depth_mm: float,
+        threshold_mm: float,
+    ) -> float:
+        if raw_rul_to_zero_km <= 0 or current_tread_depth_mm <= threshold_mm:
+            return 0.0
+
+        usable_fraction_to_threshold = (current_tread_depth_mm - threshold_mm) / current_tread_depth_mm
+        usable_fraction_to_threshold = min(1.0, max(0.0, usable_fraction_to_threshold))
+        return raw_rul_to_zero_km * usable_fraction_to_threshold
+
+    @staticmethod
+    def _prediction_distance_text(prediction: PredictResponse) -> str:
+        return (
+            f"{prediction.predicted_rul_km:,.0f} km "
+            f"({prediction.predicted_rul_miles:,.0f} miles) to "
+            f"{prediction.replacement_threshold_mm:.1f} mm recommended replacement"
+        )
+
     def predict(self, features: dict[str, Any], model_name: str) -> PredictResponse:
         normalized, defaulted = self.normalize_features(features)
-        pred_km = self._predict_from_record(model_name=model_name, record=normalized)
-        pred_miles = pred_km * 0.621371
+        raw_pred_km = self._predict_from_record(model_name=model_name, record=normalized)
+        current_tread_depth_mm = float(normalized.get("current_tread_depth(mm)", 0.0) or 0.0)
+        pred_km = self._rul_to_tread_threshold(
+            raw_rul_to_zero_km=raw_pred_km,
+            current_tread_depth_mm=current_tread_depth_mm,
+            threshold_mm=ACTIVE_REPLACEMENT_TREAD_DEPTH_MM,
+        )
+        legal_pred_km = self._rul_to_tread_threshold(
+            raw_rul_to_zero_km=raw_pred_km,
+            current_tread_depth_mm=current_tread_depth_mm,
+            threshold_mm=LEGAL_MINIMUM_TREAD_DEPTH_MM,
+        )
+        pred_miles = pred_km * KM_TO_MILES
+        raw_pred_miles = raw_pred_km * KM_TO_MILES
+        legal_pred_miles = legal_pred_km * KM_TO_MILES
         model_feature_cols = set(self.models[model_name]["feature_cols"])
         model_defaulted = [col for col in defaulted if col in model_feature_cols]
 
@@ -940,6 +986,13 @@ class TireRULService:
             model=model_name,
             predicted_rul_km=round(pred_km, 2),
             predicted_rul_miles=round(pred_miles, 2),
+            raw_model_rul_to_zero_km=round(raw_pred_km, 2),
+            raw_model_rul_to_zero_miles=round(raw_pred_miles, 2),
+            legal_minimum_rul_km=round(legal_pred_km, 2),
+            legal_minimum_rul_miles=round(legal_pred_miles, 2),
+            replacement_threshold_mm=ACTIVE_REPLACEMENT_TREAD_DEPTH_MM,
+            legal_minimum_tread_depth_mm=LEGAL_MINIMUM_TREAD_DEPTH_MM,
+            recommended_replacement_tread_depth_mm=RECOMMENDED_REPLACEMENT_TREAD_DEPTH_MM,
             defaults_used=model_defaulted,
             defaults_used_count=len(model_defaulted),
             normalized_features=normalized,
@@ -963,6 +1016,7 @@ Rules:
 - Numeric fields must be numbers.
 - Keep categorical fields lower-case strings.
 - Convert miles to kilometers for any distance field.
+- Convert tread depth in inches or 32nds of an inch to millimeters.
 - Convert booleans like retreaded yes/no into 1 or 0.
 
 User message:
@@ -1009,15 +1063,32 @@ User message:
         def _match(pattern: str) -> re.Match[str] | None:
             return re.search(pattern, text, flags=re.IGNORECASE)
 
+        def _thirty_seconds_to_mm(value: str) -> float:
+            return (float(value) / 32.0) * 25.4
+
         m = _match(r"(?:current\s*)?tread(?:\s*depth)?[^\d]{0,12}(-?\d+(?:\.\d+)?)\s*mm")
         if not m:
             m = _match(r"(-?\d+(?:\.\d+)?)\s*mm[^\n.]{0,20}tread")
         if m:
             parsed["current_tread_depth(mm)"] = float(m.group(1))
+        if "current_tread_depth(mm)" not in parsed:
+            m = _match(r"(?:current\s*)?tread(?:\s*depth)?[^\d]{0,12}(-?\d+(?:\.\d+)?)\s*/\s*32")
+            if not m:
+                m = _match(r"(-?\d+(?:\.\d+)?)\s*/\s*32[^\n.]{0,20}tread")
+            if not m:
+                m = _match(r"(?:current\s*)?tread(?:\s*depth)?[^\d]{0,12}(-?\d+(?:\.\d+)?)\s*(?:32nds?|thirty[-\s]?seconds?)")
+            if m:
+                parsed["current_tread_depth(mm)"] = _thirty_seconds_to_mm(m.group(1))
 
         m = _match(r"(?:standard|new|original)\s*tread(?:\s*depth)?[^\d]{0,12}(-?\d+(?:\.\d+)?)\s*mm")
         if m:
             parsed["Standard_tread_depth(mm)"] = float(m.group(1))
+        if "Standard_tread_depth(mm)" not in parsed:
+            m = _match(r"(?:standard|new|original)\s*tread(?:\s*depth)?[^\d]{0,12}(-?\d+(?:\.\d+)?)\s*/\s*32")
+            if not m:
+                m = _match(r"(?:standard|new|original)\s*tread(?:\s*depth)?[^\d]{0,12}(-?\d+(?:\.\d+)?)\s*(?:32nds?|thirty[-\s]?seconds?)")
+            if m:
+                parsed["Standard_tread_depth(mm)"] = _thirty_seconds_to_mm(m.group(1))
 
         m = _match(r"(?:driven|odometer|odo|mileage)[^\d]{0,20}(-?\d+(?:\.\d+)?)\s*(km|kilometers|mi|miles)")
         if m:
@@ -1414,11 +1485,11 @@ User message:
         recap = self._summarize_parsed(parsed_features)
 
         if not needs_follow_up and prediction is not None:
-            if deterministic_message and not deterministic_message.startswith("Estimated remaining tyre life:"):
+            if deterministic_message and not deterministic_message.startswith("Estimated tyre life to"):
                 return deterministic_message
             message = (
-                f"Thanks, based on what you shared I estimate about {prediction.predicted_rul_km:,.0f} km "
-                f"({prediction.predicted_rul_miles:,.0f} miles) remaining."
+                f"Thanks, based on what you shared I estimate about "
+                f"{self._prediction_distance_text(prediction)}."
             )
             if prediction.defaults_used_count:
                 message += (
@@ -1516,8 +1587,7 @@ User message:
             if session.get("has_prediction"):
                 prediction = self.predict(features=session["features"], model_name=session["model"])
                 deterministic_message = (
-                    f"Hey! Your latest estimate is about {prediction.predicted_rul_km:,.0f} km "
-                    f"({prediction.predicted_rul_miles:,.0f} miles) remaining. "
+                    f"Hey! Your latest estimate is about {self._prediction_distance_text(prediction)}. "
                     "Share any new tire detail if you want me to refine it, or press New Case to start fresh."
                 )
                 assistant_message = self._conversational_response(
@@ -1606,7 +1676,7 @@ User message:
                 session["noinfo_count"] = 0
                 deterministic_message = (
                     f"I’ll continue with defaults for missing fields and estimate now: "
-                    f"{prediction.predicted_rul_km:,.0f} km ({prediction.predicted_rul_miles:,.0f} miles) remaining "
+                    f"{self._prediction_distance_text(prediction)} "
                     f"using {prediction.model}."
                 )
                 assistant_message = self._conversational_response(
@@ -1740,8 +1810,8 @@ User message:
 
             if user_is_done_sharing or user_no_valid_response:
                 assistant_message = (
-                    f"Estimated remaining tyre life: {prediction.predicted_rul_km:,.0f} km "
-                    f"({prediction.predicted_rul_miles:,.0f} miles) using {prediction.model}."
+                    f"Estimated tyre life to recommended replacement: "
+                    f"{self._prediction_distance_text(prediction)} using {prediction.model}."
                 )
                 if prediction.defaults_used_count:
                     assistant_message += (
@@ -1812,8 +1882,8 @@ User message:
             )
 
         assistant_message = (
-            f"Estimated remaining tyre life: {prediction.predicted_rul_km:,.0f} km "
-            f"({prediction.predicted_rul_miles:,.0f} miles) using {prediction.model}."
+            f"Estimated tyre life to recommended replacement: "
+            f"{self._prediction_distance_text(prediction)} using {prediction.model}."
         )
         if prediction.defaults_used_count:
             assistant_message += (

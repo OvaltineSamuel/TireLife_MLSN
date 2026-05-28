@@ -1,8 +1,13 @@
 import TreadGauge from './TreadGauge.jsx'
 import {
+  distanceUnitLabel,
   derivePredictionSnapshot,
+  formatTreadWithUnit,
   formatInt,
   formatOneDecimal,
+  kmToDisplayDistance,
+  mmToDisplayTread,
+  treadUnitLabel,
 } from '../utils/prediction.js'
 
 const metricCard = {
@@ -13,14 +18,24 @@ const metricCard = {
   textAlign: 'center',
 }
 
-export default function ResultCard({ prediction }) {
+export default function ResultCard({ prediction, distanceUnit = 'km', treadUnit = 'mm' }) {
   const snapshot = derivePredictionSnapshot(prediction)
   if (!snapshot) return null
 
+  const distanceLabel = distanceUnitLabel(distanceUnit)
+  const treadLabel = treadUnitLabel(treadUnit)
+  const mainDistance = kmToDisplayDistance(snapshot.predictedKm, distanceUnit)
+  const legalMinimumDistance = kmToDisplayDistance(snapshot.legalMinimumRulKm, distanceUnit)
+  const currentTread = mmToDisplayTread(snapshot.currentTread, treadUnit)
+  const usableTread = mmToDisplayTread(snapshot.usableTread, treadUnit)
+  const replacementThreshold = formatTreadWithUnit(snapshot.replacementThresholdMm, treadUnit)
+  const legalMinimumThreshold = formatTreadWithUnit(snapshot.legalMinimumTreadDepthMm, treadUnit)
+
   const metrics = [
-    { label: 'Miles Left', value: formatInt(snapshot.predictedMiles), unit: 'mi' },
     { label: 'Years Left', value: formatOneDecimal(snapshot.yearsLeft), unit: 'yrs' },
-    { label: 'Tread Depth', value: formatOneDecimal(snapshot.remainingTread), unit: 'mm' },
+    { label: 'Current Tread', value: formatOneDecimal(currentTread), unit: treadLabel },
+    { label: 'Usable Tread', value: formatOneDecimal(usableTread), unit: treadLabel },
+    { label: 'Legal Min', value: formatInt(legalMinimumDistance), unit: `${distanceLabel} to ${legalMinimumThreshold}` },
   ]
 
   return (
@@ -33,13 +48,13 @@ export default function ResultCard({ prediction }) {
       boxShadow: '0 2px 10px rgba(15, 23, 42, 0.07)',
     }}>
       <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>
-        Final Tire Life Estimate
+        Tire Life Estimate to {replacementThreshold}
       </div>
       <div style={{ marginTop: 3, fontSize: 34, fontWeight: 800, color: '#0f172a', lineHeight: 1.05 }}>
-        {formatInt(snapshot.predictedKm)} km
+        {formatInt(mainDistance)} {distanceLabel}
       </div>
       <div style={{ marginTop: 5, fontSize: 14, color: '#475569' }}>
-        {formatInt(snapshot.predictedMiles)} miles | model: {snapshot.model}
+        To recommended replacement | model: {snapshot.model}
       </div>
 
       <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -60,7 +75,7 @@ export default function ResultCard({ prediction }) {
         </div>
       </div>
 
-      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(108px, 1fr))', gap: 8 }}>
+      <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(136px, 1fr))', gap: 8 }}>
         {metrics.map(metric => (
           <div key={metric.label} style={metricCard}>
             <div style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>

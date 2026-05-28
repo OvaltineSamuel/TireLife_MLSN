@@ -8,9 +8,49 @@ const TABS = [
   { id: 'chat', label: 'Chat' },
 ]
 
+function UnitToggle({ label, value, options, onChange }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 5 }}>
+        {label}
+      </div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        background: '#f3f4f6',
+        borderRadius: 8,
+        padding: 3,
+        border: '1px solid #e5e7eb',
+      }}>
+        {options.map(option => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            style={{
+              border: 'none',
+              borderRadius: 6,
+              padding: '7px 8px',
+              background: value === option.value ? '#111827' : 'transparent',
+              color: value === option.value ? '#fff' : '#64748b',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [tab, setTab] = useState('form')
   const [availableModels, setAvailableModels] = useState(['lightgbm'])
+  const [distanceUnit, setDistanceUnit] = useState('km')
+  const [treadUnit, setTreadUnit] = useState('mm')
 
   useEffect(() => {
     let ignore = false
@@ -78,7 +118,7 @@ export default function App() {
             background: '#f3f4f6',
             borderRadius: 8,
             padding: 4,
-            marginBottom: '1.5rem',
+            marginBottom: 12,
           }}>
             {TABS.map(t => (
               <button
@@ -103,9 +143,41 @@ export default function App() {
             ))}
           </div>
 
-          {tab === 'form'
-            ? <StructuredForm availableModels={availableModels} />
-            : <ChatMode availableModels={availableModels} />}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: '1.5rem' }}>
+            <UnitToggle
+              label="Distance Unit"
+              value={distanceUnit}
+              options={[
+                { value: 'km', label: 'km' },
+                { value: 'miles', label: 'miles' },
+              ]}
+              onChange={setDistanceUnit}
+            />
+            <UnitToggle
+              label="Tread Unit"
+              value={treadUnit}
+              options={[
+                { value: 'mm', label: 'mm' },
+                { value: 'inch32', label: 'inch' },
+              ]}
+              onChange={setTreadUnit}
+            />
+          </div>
+
+          <div style={{ display: tab === 'form' ? 'block' : 'none' }}>
+            <StructuredForm
+              availableModels={availableModels}
+              distanceUnit={distanceUnit}
+              treadUnit={treadUnit}
+            />
+          </div>
+          <div style={{ display: tab === 'chat' ? 'block' : 'none' }}>
+            <ChatMode
+              availableModels={availableModels}
+              distanceUnit={distanceUnit}
+              treadUnit={treadUnit}
+            />
+          </div>
         </main>
 
         {/* ── Footer ── */}

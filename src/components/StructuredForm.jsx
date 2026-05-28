@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { TIRE_BRANDS } from '../constants.js'
 import { predictTireLife } from '../api/tirelifeApi.js'
 import ResultCard from './ResultCard.jsx'
-
-const MILES_TO_KM = 1.60934
+import {
+  displayDistanceToKm,
+  displayTreadToMm,
+  kmToDisplayDistance,
+  mmToDisplayTread,
+} from '../utils/prediction.js'
 
 const DEFAULT_FORM = {
   model: 'lightgbm',
@@ -48,12 +52,22 @@ function optionalNumber(value) {
   return value === '' ? null : Number(value)
 }
 
-function validate(form) {
+function formatEditableNumber(value, fractionDigits = 1) {
+  if (value === '') return ''
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return value
+  return String(Number(numeric.toFixed(fractionDigits)))
+}
+
+function validate(form, distanceUnit, treadUnit) {
   const errors = {}
   const yearsOwned = Number(form.yearsOwned)
-  const milesPerDay = Number(form.milesPerDay)
+  const distancePerDay = Number(form.milesPerDay)
   const currentTread = optionalNumber(form.currentTread)
   const pressure = optionalNumber(form.pressure)
+  const maxTread = treadUnit === 'inch32' ? 20 : 15
+  const treadLabel = treadUnit === 'inch32' ? '32nds of an inch' : 'mm'
+  const distanceLabel = distanceUnit === 'miles' ? 'miles' : 'kilometers'
 
   if (form.vehicleModel.trim().length > 80) {
     errors.vehicleModel = 'Keep vehicle model under 80 characters'
@@ -61,11 +75,11 @@ function validate(form) {
   if (!form.yearsOwned || Number.isNaN(yearsOwned) || yearsOwned < 0) {
     errors.yearsOwned = 'Enter a valid number of years'
   }
-  if (!form.milesPerDay || Number.isNaN(milesPerDay) || milesPerDay <= 0) {
-    errors.milesPerDay = 'Enter miles per day greater than 0'
+  if (!form.milesPerDay || Number.isNaN(distancePerDay) || distancePerDay <= 0) {
+    errors.milesPerDay = `Enter ${distanceLabel} per day greater than 0`
   }
-  if (currentTread !== null && (Number.isNaN(currentTread) || currentTread < 0 || currentTread > 15)) {
-    errors.currentTread = 'Enter 0 to 15 mm, or leave blank'
+  if (currentTread !== null && (Number.isNaN(currentTread) || currentTread < 0 || currentTread > maxTread)) {
+    errors.currentTread = `Enter 0 to ${maxTread} ${treadLabel}, or leave blank`
   }
   if (pressure !== null && (Number.isNaN(pressure) || pressure < 15 || pressure > 60)) {
     errors.pressure = 'Enter 15 to 60 psi, or leave blank'
@@ -74,10 +88,10 @@ function validate(form) {
   return errors
 }
 
-function buildFeatures(form) {
+function buildFeatures(form, distanceUnit, treadUnit) {
   const yearsOwned = Number(form.yearsOwned)
-  const milesPerDay = Number(form.milesPerDay)
-  const kilometersDriven = yearsOwned * 365.25 * milesPerDay * MILES_TO_KM
+  const distancePerDay = Number(form.milesPerDay)
+  const kilometersDriven = yearsOwned * 365.25 * displayDistanceToKm(distancePerDay, distanceUnit)
   const features = {
     tyre_brand: form.brand,
     road_condition: form.roadCondition,
@@ -90,7 +104,7 @@ function buildFeatures(form) {
     features.vehicle_model = form.vehicleModel.trim()
   }
   if (form.currentTread !== '') {
-    features['current_tread_depth(mm)'] = Number(form.currentTread)
+    features['current_tread_depth(mm)'] = displayTreadToMm(Number(form.currentTread), treadUnit)
   }
   if (form.pressure !== '') {
     features['average_inflation_pressure(psi)'] = Number(form.pressure)
@@ -99,18 +113,61 @@ function buildFeatures(form) {
   return features
 }
 
-export default function StructuredForm({ availableModels = ['lightgbm'] }) {
+export default function StructuredForm({
+  availableModels = ['lightgbm'],
+  distanceUnit = 'km',
+  treadUnit = 'mm',
+}) {
   const [form, setForm] = useState(DEFAULT_FORM)
   const [errors, setErrors] = useState({})
   const [result, setResult] = useState(null)
   const [apiError, setApiError] = useState('')
   const [loading, setLoading] = useState(false)
+  const previousDistanceUnit = useRef(distanceUnit)
+  const previousTreadUnit = useRef(treadUnit)
 
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
 
+  useEffect(() => {
+    if (previousDistanceUnit.current === distanceUnit) return
+
+    setForm(current => {
+      if (current.milesPerDay === '') return current
+      const kmPerDay = displayDistanceToKm(current.milesPerDay, previousDistanceUnit.current)
+      return {
+        ...current,
+        milesPerDay: formatEditableNumber(kmToDisplayDistance(kmPerDay, distanceUnit), 1),
+      }
+    })
+    setErrors(current => ({ ...current, milesPerDay: undefined }))
+    previousDistanceUnit.current = distanceUnit
+  }, [distanceUnit])
+
+  useEffect(() => {
+    if (previousTreadUnit.current === treadUnit) return
+
+    setForm(current => {
+      if (current.currentTread === '') return current
+      const treadMm = displayTreadToMm(current.currentTread, previousTreadUnit.current)
+      return {
+        ...current,
+        currentTread: formatEditableNumber(mmToDisplayTread(treadMm, treadUnit), 1),
+      }
+    })
+    setErrors(current => ({ ...current, currentTread: undefined }))
+    previousTreadUnit.current = treadUnit
+  }, [treadUnit])
+
+  function resetForm() {
+    setForm(DEFAULT_FORM)
+    setErrors({})
+    setResult(null)
+    setApiError('')
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
-    const nextErrors = validate(form)
+    const nextErrors = validate(form, distanceUnit, treadUnit)
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors)
       return
@@ -123,7 +180,7 @@ export default function StructuredForm({ availableModels = ['lightgbm'] }) {
     try {
       const prediction = await predictTireLife({
         model: form.model,
-        features: buildFeatures(form),
+        features: buildFeatures(form, distanceUnit, treadUnit),
       })
       setResult(prediction)
     } catch (error) {
@@ -190,12 +247,12 @@ export default function StructuredForm({ availableModels = ['lightgbm'] }) {
         </div>
 
         <div>
-          <label style={labelStyle}>Miles per Day</label>
+          <label style={labelStyle}>{distanceUnit === 'miles' ? 'Miles' : 'Kilometers'} per Day</label>
           <input
             type="number"
-            min="1"
-            step="1"
-            placeholder="Example: 30"
+            min="0.1"
+            step="0.1"
+            placeholder={distanceUnit === 'miles' ? 'Example: 30' : 'Example: 48'}
             value={form.milesPerDay}
             onChange={event => set('milesPerDay', event.target.value)}
             style={inputStyle(errors.milesPerDay)}
@@ -204,13 +261,15 @@ export default function StructuredForm({ availableModels = ['lightgbm'] }) {
         </div>
 
         <div>
-          <label style={labelStyle}>Current Tread Depth (mm)</label>
+          <label style={labelStyle}>
+            Current Tread Depth ({treadUnit === 'inch32' ? '32nds in' : 'mm'})
+          </label>
           <input
             type="number"
             min="0"
-            max="15"
-            step="0.1"
-            placeholder="Optional"
+            max={treadUnit === 'inch32' ? '20' : '15'}
+            step={treadUnit === 'inch32' ? '1' : '0.1'}
+            placeholder={treadUnit === 'inch32' ? 'Example: 6' : 'Optional'}
             value={form.currentTread}
             onChange={event => set('currentTread', event.target.value)}
             style={inputStyle(errors.currentTread)}
@@ -275,27 +334,46 @@ export default function StructuredForm({ availableModels = ['lightgbm'] }) {
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={loading}
-        style={{
-          marginTop: '1.25rem',
-          width: '100%',
-          padding: '11px',
-          background: loading ? '#6b7280' : '#111',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 8,
-          fontSize: 14,
-          fontWeight: 600,
-          cursor: loading ? 'not-allowed' : 'pointer',
-          letterSpacing: '0.05em',
-        }}
-      >
-        {loading ? 'Predicting...' : 'Calculate Remaining Life'}
-      </button>
+      <div style={{ marginTop: '1.25rem', display: 'flex', gap: 8 }}>
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            flex: 1,
+            padding: '11px',
+            background: loading ? '#6b7280' : '#111',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            letterSpacing: '0.05em',
+          }}
+        >
+          {loading ? 'Predicting...' : 'Calculate Remaining Life'}
+        </button>
+        <button
+          type="button"
+          onClick={resetForm}
+          disabled={loading}
+          style={{
+            width: 82,
+            padding: '11px 10px',
+            background: '#fff',
+            color: '#475569',
+            border: '1px solid #d1d5db',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          Reset
+        </button>
+      </div>
 
-      <ResultCard prediction={result} />
+      <ResultCard prediction={result} distanceUnit={distanceUnit} treadUnit={treadUnit} />
     </form>
   )
 }

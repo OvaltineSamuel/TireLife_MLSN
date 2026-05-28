@@ -1,5 +1,5 @@
 /**
- * Semi-circular gauge showing tread percentage remaining.
+ * Semi-circular gauge showing usable tread percentage remaining.
  */
 export default function TreadGauge({ pct, color }) {
   const r = 52
@@ -13,7 +13,7 @@ export default function TreadGauge({ pct, color }) {
       height="80"
       viewBox="0 0 128 88"
       style={{ display: 'block', margin: '0 auto' }}
-      aria-label={`${Math.round(pct)}% tread remaining`}
+      aria-label={`${Math.round(pct)}% usable tread remaining`}
       role="img"
     >
       {/* Background arc */}
@@ -52,7 +52,7 @@ export default function TreadGauge({ pct, color }) {
         fill="#9ca3af"
         fontFamily="system-ui"
       >
-        tread remaining
+        usable tread
       </text>
     </svg>
   )
