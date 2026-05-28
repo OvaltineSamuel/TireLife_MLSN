@@ -128,19 +128,3 @@ curl -X POST http://127.0.0.1:8000/api/predict \
     }
   }'
 ```
-
-## Recommended Free Demo Hosting
-
-For this codebase, use a free FastAPI-capable web service such as Render instead
-of Streamlit Community Cloud. Streamlit is excellent for Streamlit apps, but this
-project already has a React frontend and FastAPI backend.
-
-Suggested web service settings:
-
-```text
-Build command: pip install -r requirements.txt && npm ci && npm run build
-Start command: python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
-```
-
-Set any needed environment variables from `.env.example`, especially artifact
-paths and optional Gemini keys.

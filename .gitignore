@@ -111,6 +111,9 @@ artifacts/*
 assets/*
 !assets/TireLife_UI_QRCode.png
 
+*.md
+!README.md
+
 Synthetic Automobile Tyre RUL Data.csv
 *.parquet
 *.pkl
