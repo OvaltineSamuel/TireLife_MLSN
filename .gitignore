@@ -1,0 +1,118 @@
+# =========================
+# OS-specific junk files
+# =========================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# =========================
+# Python cache/build files
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-wheel-metadata/
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+ENV/
+conda-meta/
+
+# =========================
+# Testing / lint / coverage
+# =========================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+.hypothesis/
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# IDE/editor settings
+# =========================
+.vscode/
+.idea/
+*.iml
+
+# =========================
+# Logs and temp files
+# =========================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.tfevents
+*.tsv
+.pt_tmp/
+catboost_info/
+lightning_logs/
+
+# =========================
+# Secrets / env files
+# =========================
+.env
+.env.*
+*.env
+!.env.example
+
+# =========================
+# ML artifacts and local data
+# =========================
+artifacts/
+!artifacts/trained_models/feature_profile.joblib
+!artifacts/trained_models/lightgbm_normal_non_leakage.joblib
+!artifacts/trained_models/deeplearning_test_mlp.joblib
+Synthetic Automobile Tyre RUL Data.csv
+*.parquet
+*.pkl
+*.joblib
+*.onnx
+*.h5
+*.ckpt
+*.pt
+*.pth
