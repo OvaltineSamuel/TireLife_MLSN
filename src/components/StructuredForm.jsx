@@ -269,7 +269,7 @@ export default function StructuredForm({
             min="0"
             max={treadUnit === 'inch32' ? '20' : '15'}
             step={treadUnit === 'inch32' ? '1' : '0.1'}
-            placeholder={treadUnit === 'inch32' ? 'Example: 6' : 'Optional'}
+            placeholder="Strongly Recommended"
             value={form.currentTread}
             onChange={event => set('currentTread', event.target.value)}
             style={inputStyle(errors.currentTread)}
